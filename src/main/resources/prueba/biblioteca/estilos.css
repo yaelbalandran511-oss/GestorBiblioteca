@@ -1,0 +1,25 @@
+.root { -fx-font-family: "Segoe UI"; }
+.topbar { -fx-background-color: white; -fx-border-color: transparent transparent #e6eaf0 transparent; }
+.brand-mark { -fx-background-color:#287c72; -fx-text-fill:white; -fx-font-size:18px; -fx-font-weight:bold; -fx-padding:8 12; -fx-background-radius:9; }
+.brand-copy .label:first-child { -fx-font-size:13px; -fx-font-weight:bold; -fx-text-fill:#142d3b; -fx-letter-spacing:1px; }
+.brand-copy .label:last-child { -fx-font-size:11px; -fx-text-fill:#80909d; }
+.sidebar { -fx-background-color:#142d3b; }
+.side-caption { -fx-text-fill:#8ea7b1; -fx-font-size:10px; -fx-font-weight:bold; -fx-padding:0 0 10 12; }
+.nav-button { -fx-background-color:transparent; -fx-text-fill:#c5d4d9; -fx-padding:12 14; -fx-font-size:13px; -fx-background-radius:8; -fx-cursor:hand; }
+.nav-button:hover { -fx-background-color:#203d4c; -fx-text-fill:white; }
+.nav-selected { -fx-background-color:#287c72; -fx-text-fill:white; -fx-font-weight:bold; }
+.page-title { -fx-font-size:25px; -fx-font-weight:bold; -fx-text-fill:#142d3b; }
+.page-subtitle { -fx-font-size:13px; -fx-text-fill:#72818d; }
+.card { -fx-background-color:white; -fx-padding:18; -fx-background-radius:12; -fx-border-color:#e7ebf0; -fx-border-radius:12; -fx-effect:dropshadow(gaussian,rgba(21,43,58,0.05),12,0,0,3); }
+.search-field { -fx-background-color:#f7f9fb; -fx-border-color:#e2e8ee; -fx-border-radius:7; -fx-background-radius:7; -fx-padding:10 12; }
+.data-table { -fx-background-color:white; -fx-border-color:#e9edf1; -fx-border-radius:8; -fx-background-radius:8; }
+.data-table .column-header-background { -fx-background-color:#f5f7f9; -fx-background-radius:8 8 0 0; }
+.data-table .column-header .label { -fx-text-fill:#647481; -fx-font-size:10px; -fx-font-weight:bold; }
+.data-table .table-row-cell { -fx-cell-size:42px; -fx-border-color:transparent transparent #f0f2f5 transparent; }
+.data-table .table-row-cell:selected { -fx-background-color:#e4f2ef; -fx-text-background-color:#142d3b; }
+.primary-button { -fx-background-color:#287c72; -fx-text-fill:white; -fx-font-weight:bold; -fx-padding:10 16; -fx-background-radius:7; -fx-cursor:hand; }
+.primary-button:hover { -fx-background-color:#20695f; }
+.secondary-button,.light-button { -fx-background-color:#edf2f5; -fx-text-fill:#334c5a; -fx-padding:9 13; -fx-background-radius:7; -fx-cursor:hand; }
+.danger-button { -fx-background-color:#fff0ed; -fx-text-fill:#b94d3d; -fx-padding:9 13; -fx-background-radius:7; -fx-cursor:hand; }
+.field-label { -fx-text-fill:#526574; -fx-font-weight:bold; }
+.form-section { -fx-text-fill:#287c72; -fx-font-weight:bold; -fx-padding:6 0 2 0; }
