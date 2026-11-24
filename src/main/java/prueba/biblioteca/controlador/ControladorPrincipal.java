@@ -9,13 +9,18 @@ import prueba.biblioteca.vista.VistaPrincipal;
 
 /** Coordina navegación y composición de vistas; no contiene consultas ni controles de formulario. */
 public final class ControladorPrincipal {
+    /** Vista que contiene la ventana y la navegación principal. */
     private final VistaPrincipal vista;
+    /** Controladores de las secciones; comparten un único modelo de base de datos. */
     private final ControladorLibros libros;
     private final ControladorPrestamos prestamos;
     private final ControladorConexion conexiones;
+    /** Ventana JavaFX que se usa como propietaria de los diálogos. */
     private Stage stage;
+    /** Resultado de la última prueba de la base espejo. */
     private boolean replicaDisponible;
 
+    /** Construye la coordinación MVC y conecta cada botón con su acción. */
     public ControladorPrincipal(BibliotecaDB modelo) {
         vista = new VistaPrincipal();
         libros = new ControladorLibros(modelo);
@@ -27,6 +32,7 @@ public final class ControladorPrincipal {
         vista.alElegirConexiones(this::abrirConexiones);
     }
 
+    /** Muestra la ventana, verifica la conexión y abre el catálogo inicial. */
     public void iniciar(Stage stage) {
         this.stage = stage;
         vista.mostrar(stage);
@@ -35,6 +41,7 @@ public final class ControladorPrincipal {
         else mostrarLibros();
     }
 
+    /** Actualiza el estado visible de conexión principal y réplica. */
     private void comprobarConexiones() {
         replicaDisponible = false;
         try {
@@ -45,6 +52,7 @@ public final class ControladorPrincipal {
         }
     }
 
+    /** Prepara la pantalla del catálogo y carga sus registros. */
     private void mostrarLibros() {
         vista.seleccionarSeccion("libros");
         VistaLibros pagina = new VistaLibros(libros, cantidad ->
@@ -54,6 +62,7 @@ public final class ControladorPrincipal {
         pagina.inicializar();
     }
 
+    /** Prepara la pantalla de préstamos activos o historial completo. */
     private void mostrarPrestamos(boolean historial) {
         vista.seleccionarSeccion(historial ? "historial" : "prestamos");
         VistaPrestamos pagina = new VistaPrestamos(prestamos, historial, cantidad -> {
@@ -66,11 +75,13 @@ public final class ControladorPrincipal {
         pagina.inicializar();
     }
 
+    /** Texto corto que informa si la escritura espejo está configurada y disponible. */
     private String estadoReplica() {
         if (!conexiones.replicaConfigurada()) return "sin réplica configurada";
         return replicaDisponible ? "réplica conectada" : "réplica sin conexión";
     }
 
+    /** Abre el diálogo de conexiones y vuelve al catálogo después de guardar. */
     private void abrirConexiones() {
         new VistaConexiones(conexiones).mostrar(stage, () -> {
             comprobarConexiones();

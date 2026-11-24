@@ -14,16 +14,21 @@ import javafx.stage.Stage;
 
 /** Ventana principal: estructura visual y navegación, sin consultas SQL ni reglas de negocio. */
 public final class VistaPrincipal {
+    /** Contenedor raíz de encabezado, menú, contenido de sección y estado inferior. */
     private final BorderPane root = new BorderPane();
+    /** Mensaje breve sobre los registros y la conexión actual. */
     private final Label status = new Label("Preparando biblioteca…");
+    /** Botones para seleccionar cada área principal del sistema. */
     private final Button navBooks = nav("▤   Libros");
     private final Button navLoans = nav("↗   Préstamos");
     private final Button navHistory = nav("◷   Historial");
+    /** Acciones que el controlador principal asigna a los botones de navegación. */
     private Runnable alElegirLibros = () -> { };
     private Runnable alElegirPrestamos = () -> { };
     private Runnable alElegirHistorial = () -> { };
     private Runnable alElegirConexiones = () -> { };
 
+    /** Construye la estructura general y conecta los botones con acciones asignables. */
     public VistaPrincipal() {
         root.setStyle("-fx-background-color:#f3f6fb; -fx-font-family:'Segoe UI';");
         root.setTop(crearEncabezado());
@@ -35,6 +40,7 @@ public final class VistaPrincipal {
         navHistory.setOnAction(event -> alElegirHistorial.run());
     }
 
+    /** Crea la escena y muestra la ventana principal de JavaFX. */
     public void mostrar(Stage stage) {
         Scene scene = new Scene(root, 1120, 740);
         var stylesheet = getClass().getResource("/prueba/biblioteca/estilos.css");
@@ -46,13 +52,17 @@ public final class VistaPrincipal {
         stage.show();
     }
 
+    /** Registra las acciones que ejecutará el controlador al pulsar cada sección. */
     public void alElegirLibros(Runnable accion) { alElegirLibros = accion; }
     public void alElegirPrestamos(Runnable accion) { alElegirPrestamos = accion; }
     public void alElegirHistorial(Runnable accion) { alElegirHistorial = accion; }
     public void alElegirConexiones(Runnable accion) { alElegirConexiones = accion; }
+    /** Cambia el panel central sin recrear toda la ventana. */
     public void mostrarContenido(Node contenido) { root.setCenter(contenido); }
+    /** Actualiza el texto de estado del pie de la ventana. */
     public void actualizarEstado(String texto) { status.setText(texto); }
 
+    /** Resalta el botón de la sección que se encuentra abierta. */
     public void seleccionarSeccion(String seccion) {
         navBooks.getStyleClass().remove("nav-selected");
         navLoans.getStyleClass().remove("nav-selected");
@@ -65,6 +75,7 @@ public final class VistaPrincipal {
         }
     }
 
+    /** Encabezado con identidad visual y botón para configurar las bases. */
     private Node crearEncabezado() {
         Label logo = new Label("B"); logo.getStyleClass().add("brand-mark");
         VBox brand = new VBox(2, new Label("BIBLIOTECA"), new Label("Panel de gestión"));
@@ -78,6 +89,7 @@ public final class VistaPrincipal {
         return bar;
     }
 
+    /** Menú lateral para navegar entre catálogo, préstamos e historial. */
     private Node crearBarraLateral() {
         Label caption = new Label("MENÚ PRINCIPAL"); caption.getStyleClass().add("side-caption");
         VBox box = new VBox(9, caption, navBooks, navLoans, navHistory);
@@ -85,6 +97,7 @@ public final class VistaPrincipal {
         return box;
     }
 
+    /** Aplica el estilo y alineación comunes a un botón lateral. */
     private static Button nav(String text) {
         Button button = new Button(text);
         button.setMaxWidth(Double.MAX_VALUE);

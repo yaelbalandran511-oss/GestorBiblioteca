@@ -33,13 +33,18 @@ import java.util.function.IntConsumer;
 
 /** Vista para préstamos activos e historial; delega las reglas y persistencia al controlador. */
 public final class VistaPrestamos extends VBox {
+    /** Controlador que valida y guarda los préstamos. */
     private final ControladorPrestamos controlador;
+    /** Define si la pantalla muestra préstamos activos o todos los registros. */
     private final boolean historial;
+    /** Informa al panel principal el número de filas cargadas. */
     private final IntConsumer alCargar;
+    /** Registros observables que alimentan la tabla y el filtro. */
     private final ObservableList<Prestamo> filas = FXCollections.observableArrayList();
     private final TableView<Prestamo> tabla = new TableView<>();
     private Window owner;
 
+    /** Configura la vista en modo activos o historial y construye su interfaz. */
     public VistaPrestamos(ControladorPrestamos controlador, boolean historial, IntConsumer alCargar) {
         this.controlador = controlador;
         this.historial = historial;
@@ -48,9 +53,12 @@ public final class VistaPrestamos extends VBox {
         construir();
     }
 
+    /** Asocia los diálogos con la ventana principal. */
     public void setOwner(Window owner) { this.owner = owner; }
+    /** Lee los préstamos al entrar en esta sección. */
     public void inicializar() { cargar(); }
 
+    /** Construye el buscador, tabla y operaciones permitidas según el modo actual. */
     private void construir() {
         String encabezado = historial ? "Historial de préstamos" : "Préstamos activos";
         String subtitulo = historial ? "Consulta y administra todos los movimientos." : "Registra préstamos y controla devoluciones.";
@@ -62,17 +70,20 @@ public final class VistaPrestamos extends VBox {
         TextField search = new TextField(); search.setPromptText("Buscar por usuario, libro, fecha o estado...");
         search.getStyleClass().add("search-field");
         tabla.getStyleClass().add("data-table");
+        // Las columnas corresponden a propiedades de Prestamo y muestran el resumen del movimiento.
         tabla.getColumns().add(col("ID", "id", 65));
         tabla.getColumns().add(col("FECHA", "fecha", 120));
         tabla.getColumns().add(col("USUARIO", "usuario", 175));
         tabla.getColumns().add(col("LIBRO", "libro", 260));
         tabla.getColumns().add(col("ESTADO", "estado", 110));
+        // Aplica el filtro a usuario, libro, fecha y estado sin volver a consultar la base.
         FilteredList<Prestamo> filtrados = new FilteredList<>(filas, prestamo -> true);
         tabla.setItems(filtrados);
         search.textProperty().addListener((observable, anterior, texto) -> filtrados.setPredicate(prestamo ->
                 (prestamo.getUsuario() + prestamo.getLibro() + prestamo.getFecha() + prestamo.getEstado())
                         .toLowerCase().contains(texto.trim().toLowerCase())));
 
+        // La devolución se habilita desde la vista de activos, no desde el historial.
         Button editar = new Button("Editar"); editar.getStyleClass().add("secondary-button");
         Button devolver = new Button("Registrar devolución"); devolver.getStyleClass().add("secondary-button");
         Button eliminar = new Button("Eliminar"); eliminar.getStyleClass().add("danger-button");
@@ -93,6 +104,7 @@ public final class VistaPrestamos extends VBox {
         VBox.setVgrow(card, Priority.ALWAYS);
     }
 
+    /** Consulta la lista activa o el historial completo y actualiza el indicador superior. */
     private void cargar() {
         try {
             filas.setAll(controlador.listar(historial));
@@ -102,6 +114,7 @@ public final class VistaPrestamos extends VBox {
         }
     }
 
+    /** Marca el préstamo seleccionado como devuelto, conservándolo en el historial. */
     private void devolverSeleccionado() {
         Prestamo seleccionado = tabla.getSelectionModel().getSelectedItem();
         if (seleccionado == null) { VistaMensajes.informacion(owner, "Selecciona un préstamo activo."); return; }
@@ -115,6 +128,7 @@ public final class VistaPrestamos extends VBox {
         } catch (Exception exception) { VistaMensajes.error(owner, exception); }
     }
 
+    /** Confirma y elimina el préstamo seleccionado. */
     private void eliminarSeleccionado() {
         Prestamo seleccionado = tabla.getSelectionModel().getSelectedItem();
         if (seleccionado == null) { VistaMensajes.informacion(owner, "Selecciona un préstamo para eliminar."); return; }
@@ -125,10 +139,12 @@ public final class VistaPrestamos extends VBox {
         } catch (Exception exception) { VistaMensajes.error(owner, exception); }
     }
 
+    /** Abre el formulario de alta o edición y valida que las relaciones estén seleccionadas. */
     private void abrirFormulario(Prestamo seleccionado) {
         try {
             List<Usuario> usuarios = controlador.usuarios();
             List<Libro> libros = controlador.libros();
+            // Una biblioteca sin usuarios o libros no puede registrar un préstamo válido.
             if (usuarios.isEmpty() || libros.isEmpty()) {
                 VistaMensajes.informacion(owner, "Necesitas al menos un usuario y un libro antes de crear un préstamo.");
                 return;
@@ -145,6 +161,7 @@ public final class VistaPrestamos extends VBox {
                 libros.stream().filter(opcion -> opcion.getId() == seleccionado.getIdLibro()).findFirst().ifPresent(libro::setValue);
             }
             DatePicker fecha = new DatePicker(seleccionado == null ? LocalDate.now() : LocalDate.parse(seleccionado.getFecha()));
+            // Al crear, el estado inicial es Prestado y no se permite editarlo en ese momento.
             ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Prestado", "Devuelto"));
             estado.setValue(seleccionado == null ? "Prestado" : seleccionado.getEstado());
             estado.setDisable(seleccionado == null);
@@ -154,6 +171,7 @@ public final class VistaPrestamos extends VBox {
             dialog.getDialogPane().setContent(form);
             dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
             boolean[] guardado = {false};
+            // Si el guardado falla, se cancela el cierre del diálogo y se muestra el motivo.
             dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(ActionEvent.ACTION, event -> {
                 try {
                     if (usuario.getValue() == null || libro.getValue() == null) {
@@ -177,12 +195,14 @@ public final class VistaPrestamos extends VBox {
         return new VBox(4, heading, description);
     }
 
+    /** Devuelve una columna enlazada con el nombre de propiedad indicado. */
     private static <T> TableColumn<T, Object> col(String name, String property, double width) {
         TableColumn<T, Object> column = new TableColumn<>(name);
         column.setCellValueFactory(new PropertyValueFactory<>(property)); column.setPrefWidth(width);
         return column;
     }
 
+    /** Crea la cuadrícula compartida por los campos de préstamo. */
     private static GridPane formulario() {
         GridPane form = new GridPane(); form.setHgap(14); form.setVgap(12); form.setPadding(new Insets(18));
         ColumnConstraints label = new ColumnConstraints(); label.setMinWidth(120);
@@ -190,6 +210,7 @@ public final class VistaPrestamos extends VBox {
         form.getColumnConstraints().addAll(label, input); return form;
     }
 
+    /** Coloca el nombre del campo junto a su control de entrada. */
     private static void agregarFila(GridPane form, int row, String text, javafx.scene.Node input) {
         Label label = new Label(text); label.getStyleClass().add("field-label");
         if (input instanceof javafx.scene.control.Control control) control.setMaxWidth(Double.MAX_VALUE);

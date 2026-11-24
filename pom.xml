@@ -4,16 +4,19 @@
          https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Identificador escolar del proyecto Maven (no requiere dominio propio). -->
     <groupId>prueba.biblioteca</groupId>
     <artifactId>GestorBiblioteca</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
+        <!-- Java 21 es la versión objetivo del compilador; UTF-8 conserva tildes y caracteres españoles. -->
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javafx.version>21.0.6</javafx.version>
     </properties>
 
+    <!-- Librerías externas que Maven descarga para compilar y conectar con MySQL. -->
     <dependencies>
         <dependency>
             <groupId>org.openjfx</groupId>
@@ -27,6 +30,7 @@
         </dependency>
     </dependencies>
 
+    <!-- Configura el comando javafx:run y la clase principal que inicia la aplicación. -->
     <build>
         <plugins>
             <plugin>

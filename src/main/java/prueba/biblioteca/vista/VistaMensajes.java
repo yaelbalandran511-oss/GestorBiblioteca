@@ -6,9 +6,12 @@ import javafx.stage.Window;
 
 import java.sql.SQLException;
 
+/** Diálogos comunes para avisos, errores y confirmaciones de las distintas pantallas. */
 final class VistaMensajes {
+    /** Evita crear instancias; todos los métodos son utilidades estáticas. */
     private VistaMensajes() { }
 
+    /** Muestra un aviso informativo. */
     static void informacion(Window owner, String texto) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION, texto, ButtonType.OK);
         alert.setTitle("Biblioteca"); alert.setHeaderText(null);
@@ -16,6 +19,7 @@ final class VistaMensajes {
         alert.showAndWait();
     }
 
+    /** Convierte errores técnicos frecuentes de MySQL en mensajes comprensibles. */
     static void error(Window owner, Exception exception) {
         String message = exception.getMessage() == null ? exception.toString() : exception.getMessage();
         if (exception instanceof SQLException sql && "23000".equals(sql.getSQLState())) {
@@ -33,6 +37,7 @@ final class VistaMensajes {
         alert.showAndWait();
     }
 
+    /** Devuelve true solo cuando el usuario confirma explícitamente la acción. */
     static boolean confirmar(Window owner, String texto) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, texto, ButtonType.YES, ButtonType.NO);
         alert.setTitle("Confirmar acción"); alert.setHeaderText(null);

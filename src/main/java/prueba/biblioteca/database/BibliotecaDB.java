@@ -25,9 +25,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class BibliotecaDB {
+    /** Propiedades locales para una o dos conexiones MySQL. */
     private final Properties p = new Properties();
+    /** Archivo ignorado por Git donde cada computadora conserva sus credenciales. */
     private final Path config = Path.of("config.properties");
 
+    /** Carga la configuración local si ya se creó desde la ventana de conexiones. */
     public BibliotecaDB() {
         if (Files.exists(config)) {
             try (InputStream in = Files.newInputStream(config)) {
@@ -38,10 +41,14 @@ public class BibliotecaDB {
         }
     }
 
+    /** Lee un valor de configuración o usa el valor alternativo indicado. */
     public String value(String key, String fallback) { return p.getProperty(key, fallback); }
+    /** Informa si la URL de la conexión principal está definida. */
     public boolean configured() { return !value("primary.url", "").isBlank(); }
+    /** Informa si existe una URL para la conexión espejo. */
     public boolean replicaConfigured() { return !value("replica.url", "").isBlank(); }
 
+    /** Guarda las conexiones localmente sin incluirlas en los archivos del proyecto. */
     public void saveConfig(String url, String user, String pass, String replicaUrl, String replicaUser, String replicaPass) throws IOException {
         p.setProperty("primary.url", url.trim());
         p.setProperty("primary.user", user.trim());
@@ -54,6 +61,7 @@ public class BibliotecaDB {
         }
     }
 
+    /** Abre la conexión principal o la espejo usando JDBC. */
     private Connection connect(boolean replica) throws SQLException {
         String prefix = replica ? "replica." : "primary.";
         String url = value(prefix + "url", "");
@@ -63,6 +71,7 @@ public class BibliotecaDB {
         return DriverManager.getConnection(url, value(prefix + "user", ""), value(prefix + "password", ""));
     }
 
+    /** Prueba conexión principal y, cuando aplica, la conexión y el esquema espejo. */
     public void testConnections() throws SQLException {
         try (Connection ignored = connect(false)) { }
         if (replicaConfigured()) {
@@ -76,6 +85,7 @@ public class BibliotecaDB {
         }
     }
 
+    // Métodos de lectura: consultan tablas y convierten cada fila al objeto del modelo correspondiente.
     public List<Autor> autores() throws SQLException {
         List<Autor> result = new ArrayList<>();
         try (Connection c = connect(false); Statement s = c.createStatement();
@@ -85,6 +95,7 @@ public class BibliotecaDB {
         return result;
     }
 
+    /** Obtiene las categorías para el selector del formulario de libros. */
     public List<Categoria> categorias() throws SQLException {
         List<Categoria> result = new ArrayList<>();
         try (Connection c = connect(false); Statement s = c.createStatement();
@@ -94,6 +105,7 @@ public class BibliotecaDB {
         return result;
     }
 
+    /** Obtiene usuarios para el formulario de préstamos. */
     public List<Usuario> usuarios() throws SQLException {
         List<Usuario> result = new ArrayList<>();
         try (Connection c = connect(false); Statement s = c.createStatement();
@@ -103,6 +115,7 @@ public class BibliotecaDB {
         return result;
     }
 
+    /** Une Libro con Autor y Categoria para mostrar los nombres junto a sus IDs. */
     public List<Libro> libros() throws SQLException {
         List<Libro> result = new ArrayList<>();
         String sql = "SELECT l.id_libro,l.titulo,l.isbn,l.id_autor,l.id_categoria,a.nombre,c.nombre " +
@@ -115,6 +128,7 @@ public class BibliotecaDB {
         return result;
     }
 
+    /** Devuelve préstamos activos o el historial completo, con nombres de usuario y libro. */
     public List<Prestamo> prestamos(boolean historial) throws SQLException {
         List<Prestamo> result = new ArrayList<>();
         String sql = "SELECT p.id_prestamo,p.fecha_salida,p.estado,p.id_usuario,p.id_libro,u.nombre,l.titulo " +
@@ -128,17 +142,22 @@ public class BibliotecaDB {
         return result;
     }
 
-    public void guardarLibro(int id, String titulo, String isbn, String nombreAutor, int categoria) throws SQLException {
+    /** Inserta o actualiza un libro y sincroniza autor/libro con la base espejo. */
+    public void guardarLibro(int id, String titulo, String isbn, String nombreAutor,
+                             String nacionalidadAutor, int categoria) throws SQLException {
         String cleanTitle = titulo == null ? "" : titulo.trim();
         String cleanIsbn = isbn == null ? "" : isbn.trim();
         String cleanAuthor = nombreAutor == null ? "" : nombreAutor.trim();
+        String cleanNationality = nacionalidadAutor == null ? "" : nacionalidadAutor.trim();
         if (cleanTitle.isEmpty() || cleanTitle.length() > 150) throw new SQLException("El título es obligatorio y admite hasta 150 caracteres.");
         if (cleanIsbn.isEmpty() || cleanIsbn.length() > 20) throw new SQLException("El ISBN es obligatorio y admite hasta 20 caracteres.");
         if (cleanAuthor.isEmpty() || cleanAuthor.length() > 100) throw new SQLException("El nombre del autor es obligatorio y admite hasta 100 caracteres.");
+        if (cleanNationality.isEmpty() || cleanNationality.length() > 50) throw new SQLException("La nacionalidad del autor es obligatoria y admite hasta 50 caracteres.");
         final int[] generatedId = {id};
         final int[] authorId = {0};
         writeBoth((c, schema, mirror) -> {
-            int autor = obtenerOCrearAutor(c, schema, cleanAuthor, mirror, authorId[0]);
+            // El autor se busca por nombre; si es nuevo, se inserta antes que el libro para respetar la FK.
+            int autor = obtenerOCrearAutor(c, schema, cleanAuthor, cleanNationality, mirror, authorId[0]);
             if (!mirror) authorId[0] = autor;
             String table = table(schema, "Libro");
             if (id == 0) {
@@ -166,35 +185,50 @@ public class BibliotecaDB {
         });
     }
 
-    private int obtenerOCrearAutor(Connection c, String schema, String nombre, boolean mirror, int idEsperado) throws SQLException {
+    /** Busca al autor sin distinguir mayúsculas; crea uno nuevo y mantiene su ID en ambas bases. */
+    private int obtenerOCrearAutor(Connection c, String schema, String nombre, String nacionalidad,
+                                   boolean mirror, int idEsperado) throws SQLException {
         String authorTable = table(schema, "Autor");
-        String lookup = "SELECT id_autor FROM " + authorTable +
+        String lookup = "SELECT id_autor,nacionalidad FROM " + authorTable +
                 " WHERE LOWER(TRIM(nombre))=LOWER(?) ORDER BY id_autor LIMIT 1";
         try (PreparedStatement s = c.prepareStatement(lookup)) {
             s.setString(1, nombre);
             try (ResultSet rows = s.executeQuery()) {
                 if (rows.next()) {
                     int foundId = rows.getInt(1);
+                    // El ID debe coincidir para que el mismo libro apunte al mismo autor en ambas bases.
                     if (mirror && foundId != idEsperado) {
                         throw new SQLException("El autor existe con otro ID en la base espejo. Sincroniza los catálogos antes de guardar.");
+                    }
+                    // Completa nacionalidades antiguas vacías, pero conserva cualquier valor ya registrado.
+                    String currentNationality = rows.getString(2);
+                    if (currentNationality == null || currentNationality.isBlank()) {
+                        String update = "UPDATE " + authorTable +
+                                " SET nacionalidad=? WHERE id_autor=? AND (nacionalidad IS NULL OR TRIM(nacionalidad)='')";
+                        try (PreparedStatement updateStatement = c.prepareStatement(update)) {
+                            updateStatement.setString(1, nacionalidad);
+                            updateStatement.setInt(2, foundId);
+                            updateStatement.executeUpdate();
+                        }
                     }
                     return foundId;
                 }
             }
         }
 
+        // En la base espejo se reutiliza el ID creado/consultado en la conexión principal.
         if (mirror) {
             if (idEsperado <= 0) throw new SQLException("No se pudo sincronizar el autor con la base espejo.");
-            String insert = "INSERT INTO " + authorTable + "(id_autor,nombre,nacionalidad) VALUES(?,?,NULL)";
+            String insert = "INSERT INTO " + authorTable + "(id_autor,nombre,nacionalidad) VALUES(?,?,?)";
             try (PreparedStatement s = c.prepareStatement(insert)) {
-                s.setInt(1, idEsperado); s.setString(2, nombre); s.executeUpdate();
+                s.setInt(1, idEsperado); s.setString(2, nombre); s.setString(3, nacionalidad); s.executeUpdate();
             }
             return idEsperado;
         }
 
-        String insert = "INSERT INTO " + authorTable + "(nombre,nacionalidad) VALUES(?,NULL)";
+        String insert = "INSERT INTO " + authorTable + "(nombre,nacionalidad) VALUES(?,?)";
         try (PreparedStatement s = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
-            s.setString(1, nombre); s.executeUpdate();
+            s.setString(1, nombre); s.setString(2, nacionalidad); s.executeUpdate();
             try (ResultSet keys = s.getGeneratedKeys()) {
                 if (!keys.next()) throw new SQLException("MySQL no devolvió el ID del autor nuevo.");
                 return keys.getInt(1);
@@ -202,6 +236,7 @@ public class BibliotecaDB {
         }
     }
 
+    /** Elimina un libro y convierte el error de clave foránea en un mensaje entendible. */
     public void borrarLibro(int id) throws SQLException {
         writeBoth((c, schema, mirror) -> {
             try (PreparedStatement s = c.prepareStatement("DELETE FROM " + table(schema, "Libro") + " WHERE id_libro=?")) {
@@ -211,6 +246,7 @@ public class BibliotecaDB {
         });
     }
 
+    /** Registra o actualiza un préstamo; valida disponibilidad antes de marcarlo como prestado. */
     public void guardarPrestamo(int id, String fecha, int estado, int usuario, int libro) throws SQLException {
         LocalDate loanDate;
         try { loanDate = LocalDate.parse(fecha); }
@@ -246,6 +282,7 @@ public class BibliotecaDB {
         });
     }
 
+    /** Bloquea temporalmente el libro y evita que tenga dos préstamos activos a la vez. */
     private void validarDisponible(Connection c, String schema, int libro, int prestamoActual) throws SQLException {
         String bookTable = table(schema, "Libro");
         try (PreparedStatement lock = c.prepareStatement("SELECT id_libro FROM " + bookTable + " WHERE id_libro=? FOR UPDATE")) {
@@ -264,6 +301,7 @@ public class BibliotecaDB {
         }
     }
 
+    /** Borra el registro de préstamo seleccionado y replica la operación. */
     public void borrarPrestamo(int id) throws SQLException {
         writeBoth((c, schema, mirror) -> {
             try (PreparedStatement s = c.prepareStatement("DELETE FROM " + table(schema, "Prestamo") + " WHERE id_prestamo=?")) {
@@ -272,6 +310,7 @@ public class BibliotecaDB {
         });
     }
 
+    /** Cambia el estado a uno de los dos valores permitidos y sincroniza ambas bases. */
     public void cambiarEstado(int id, String estado) throws SQLException {
         if (!"Prestado".equals(estado) && !"Devuelto".equals(estado)) throw new SQLException("El estado del préstamo no es válido.");
         writeBoth((c, schema, mirror) -> {
@@ -281,12 +320,15 @@ public class BibliotecaDB {
         });
     }
 
+    /** Operación reutilizable que writeBoth ejecuta en cada conexión/esquema. */
     @FunctionalInterface private interface WriteAction {
         void run(Connection connection, String schema, boolean mirror) throws SQLException;
     }
 
+    /** Ejecuta una escritura transaccional en la base principal y opcionalmente en la espejo. */
     private void writeBoth(WriteAction action) throws SQLException {
         if (!replicaConfigured()) {
+            // Sin réplica, la transacción solo afecta a la base principal.
             try (Connection primary = connect(false)) {
                 primary.setAutoCommit(false);
                 try { action.run(primary, "", false); primary.commit(); }
@@ -296,6 +338,7 @@ public class BibliotecaDB {
         }
 
         if (sameEndpointAndCredentials()) {
+            // Si las dos bases están en el mismo servidor con la misma cuenta, ambas se escriben desde una conexión.
             String mirrorSchema = schemaFromUrl(value("replica.url", ""));
             try (Connection connection = connect(false)) {
                 connection.setAutoCommit(false);
@@ -311,7 +354,7 @@ public class BibliotecaDB {
             return;
         }
 
-        // For separate servers both operations are transactional; a failure before commit rolls back both.
+        // Para servidores separados se abre una transacción por servidor; si falla alguna escritura, se revierten ambas.
         try (Connection primary = connect(false); Connection mirror = connect(true)) {
             primary.setAutoCommit(false); mirror.setAutoCommit(false);
             try {
@@ -326,6 +369,7 @@ public class BibliotecaDB {
         }
     }
 
+    /** Detecta si ambas URLs apuntan al mismo servidor y usan las mismas credenciales. */
     private boolean sameEndpointAndCredentials() {
         String primaryEndpoint = endpoint(value("primary.url", ""));
         String mirrorEndpoint = endpoint(value("replica.url", ""));
@@ -334,11 +378,13 @@ public class BibliotecaDB {
                 && value("primary.password", "").equals(value("replica.password", ""));
     }
 
+    /** Extrae host y puerto de una URL JDBC para comparar servidores. */
     private String endpoint(String url) {
         Matcher matcher = Pattern.compile("^jdbc:mysql://([^/?;]+)", Pattern.CASE_INSENSITIVE).matcher(url);
         return matcher.find() ? matcher.group(1) : "";
     }
 
+    /** Obtiene el nombre de esquema de una URL JDBC y valida caracteres permitidos. */
     private String schemaFromUrl(String url) throws SQLException {
         Matcher matcher = Pattern.compile("^jdbc:mysql://[^/]+/([^?;]+)", Pattern.CASE_INSENSITIVE).matcher(url);
         if (!matcher.find() || !matcher.group(1).matches("[A-Za-z0-9_$]+")) {
@@ -347,16 +393,19 @@ public class BibliotecaDB {
         return matcher.group(1);
     }
 
+    /** Construye una tabla SQL; valida el nombre del esquema antes de insertarlo en la consulta. */
     private String table(String schema, String name) {
         if (schema == null || schema.isBlank()) return "`" + name + "`";
         if (!schema.matches("[A-Za-z0-9_$]+")) throw new IllegalArgumentException("Nombre de base de datos inválido.");
         return "`" + schema + "`.`" + name + "`";
     }
 
+    /** Revierte cambios pendientes; se ignora un error secundario durante rollback. */
     private void rollback(Connection connection) {
         try { connection.rollback(); } catch (SQLException ignored) { }
     }
 
+    /** Traduce una violación de integridad referencial a un mensaje más claro. */
     private SQLException friendlyConstraint(SQLException ex, String foreignKeyMessage) {
         if ("23000".equals(ex.getSQLState())) return new SQLException(foreignKeyMessage, ex.getSQLState(), ex.getErrorCode(), ex);
         return ex;

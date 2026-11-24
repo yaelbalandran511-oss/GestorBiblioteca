@@ -15,10 +15,13 @@ import prueba.biblioteca.controlador.ControladorConexion;
 
 /** Diálogo para configurar y probar MySQL; no accede directamente al archivo de configuración. */
 public final class VistaConexiones {
+    /** El controlador valida los datos y los delega al modelo para guardarlos y probarlos. */
     private final ControladorConexion controlador;
 
+    /** Recibe el controlador de configuración de MySQL. */
     public VistaConexiones(ControladorConexion controlador) { this.controlador = controlador; }
 
+    /** Muestra un formulario para la conexión principal y la réplica opcional. */
     public void mostrar(Window owner, Runnable alGuardar) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Conexiones MySQL");
@@ -27,6 +30,7 @@ public final class VistaConexiones {
 
         TextField url = new TextField(controlador.valor("primary.url", "jdbc:mysql://localhost:3306/gestor_biblioteca?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true"));
         TextField usuario = new TextField(controlador.valor("primary.user", "root"));
+        // Las contraseñas usan PasswordField para ocultar lo que se escribe en pantalla.
         PasswordField contrasena = new PasswordField(); contrasena.setText(controlador.valor("primary.password", ""));
         TextField urlEspejo = new TextField(controlador.valor("replica.url", ""));
         TextField usuarioEspejo = new TextField(controlador.valor("replica.user", ""));
@@ -44,6 +48,7 @@ public final class VistaConexiones {
         agregarFila(form, row, "Contraseña", contrasenaEspejo);
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        // Solo se cierra el diálogo si guardar y probar las conexiones termina correctamente.
         boolean[] guardado = {false};
         dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(ActionEvent.ACTION, event -> {
             try {
@@ -61,6 +66,7 @@ public final class VistaConexiones {
         }
     }
 
+    /** Disposición de dos columnas para las etiquetas y campos de conexión. */
     private static GridPane crearFormulario() {
         GridPane form = new GridPane(); form.setHgap(14); form.setVgap(12); form.setPadding(new Insets(18));
         ColumnConstraints label = new ColumnConstraints(); label.setMinWidth(120);
@@ -68,6 +74,7 @@ public final class VistaConexiones {
         form.getColumnConstraints().addAll(label, input); return form;
     }
 
+    /** Añade una fila de etiqueta y control con el mismo estilo que los demás formularios. */
     private static void agregarFila(GridPane form, int row, String text, javafx.scene.control.Control input) {
         Label label = new Label(text); label.getStyleClass().add("field-label");
         input.setMaxWidth(Double.MAX_VALUE);
