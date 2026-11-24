@@ -20,20 +20,23 @@ public final class ControladorLibros {
     public List<Autor> autores() throws SQLException { return modelo.autores(); }
     public List<Categoria> categorias() throws SQLException { return modelo.categorias(); }
 
-    public void guardar(int id, String titulo, String isbn, int idAutor, int idCategoria) throws SQLException {
+    public void guardar(int id, String titulo, String isbn, String nombreAutor, int idCategoria) throws SQLException {
         String tituloLimpio = titulo == null ? "" : titulo.trim();
         String isbnOriginal = isbn == null ? "" : isbn.trim();
+        String autorLimpio = nombreAutor == null ? "" : nombreAutor.trim();
         if (tituloLimpio.isEmpty()) throw new IllegalArgumentException("El título es obligatorio.");
         if (tituloLimpio.length() > 150) throw new IllegalArgumentException("El título admite hasta 150 caracteres.");
         if (isbnOriginal.isEmpty()) throw new IllegalArgumentException("El ISBN es obligatorio.");
         if (isbnOriginal.length() > 20) throw new IllegalArgumentException("El ISBN admite hasta 20 caracteres.");
+        if (autorLimpio.isEmpty()) throw new IllegalArgumentException("El nombre del autor es obligatorio.");
+        if (autorLimpio.length() > 100) throw new IllegalArgumentException("El nombre del autor admite hasta 100 caracteres.");
 
         String isbnNormalizado = isbnOriginal.replaceAll("[\\s-]", "");
         if (!isbnNormalizado.matches("(?:[0-9]{9}[0-9Xx]|[0-9]{13})")) {
             throw new IllegalArgumentException("Escribe un ISBN de 10 o 13 dígitos; puedes incluir guiones o espacios.");
         }
-        if (idAutor <= 0 || idCategoria <= 0) throw new IllegalArgumentException("Selecciona un autor y una categoría.");
-        modelo.guardarLibro(id, tituloLimpio, isbnNormalizado, idAutor, idCategoria);
+        if (idCategoria <= 0) throw new IllegalArgumentException("Selecciona una categoría.");
+        modelo.guardarLibro(id, tituloLimpio, isbnNormalizado, autorLimpio, idCategoria);
     }
 
     public void eliminar(int id) throws SQLException { modelo.borrarLibro(id); }

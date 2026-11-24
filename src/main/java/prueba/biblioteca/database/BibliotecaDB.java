@@ -128,13 +128,18 @@ public class BibliotecaDB {
         return result;
     }
 
-    public void guardarLibro(int id, String titulo, String isbn, int autor, int categoria) throws SQLException {
+    public void guardarLibro(int id, String titulo, String isbn, String nombreAutor, int categoria) throws SQLException {
         String cleanTitle = titulo == null ? "" : titulo.trim();
         String cleanIsbn = isbn == null ? "" : isbn.trim();
+        String cleanAuthor = nombreAutor == null ? "" : nombreAutor.trim();
         if (cleanTitle.isEmpty() || cleanTitle.length() > 150) throw new SQLException("El título es obligatorio y admite hasta 150 caracteres.");
         if (cleanIsbn.isEmpty() || cleanIsbn.length() > 20) throw new SQLException("El ISBN es obligatorio y admite hasta 20 caracteres.");
+        if (cleanAuthor.isEmpty() || cleanAuthor.length() > 100) throw new SQLException("El nombre del autor es obligatorio y admite hasta 100 caracteres.");
         final int[] generatedId = {id};
+        final int[] authorId = {0};
         writeBoth((c, schema, mirror) -> {
+            int autor = obtenerOCrearAutor(c, schema, cleanAuthor, mirror, authorId[0]);
+            if (!mirror) authorId[0] = autor;
             String table = table(schema, "Libro");
             if (id == 0) {
                 if (mirror) {
@@ -159,6 +164,42 @@ public class BibliotecaDB {
                 }
             }
         });
+    }
+
+    private int obtenerOCrearAutor(Connection c, String schema, String nombre, boolean mirror, int idEsperado) throws SQLException {
+        String authorTable = table(schema, "Autor");
+        String lookup = "SELECT id_autor FROM " + authorTable +
+                " WHERE LOWER(TRIM(nombre))=LOWER(?) ORDER BY id_autor LIMIT 1";
+        try (PreparedStatement s = c.prepareStatement(lookup)) {
+            s.setString(1, nombre);
+            try (ResultSet rows = s.executeQuery()) {
+                if (rows.next()) {
+                    int foundId = rows.getInt(1);
+                    if (mirror && foundId != idEsperado) {
+                        throw new SQLException("El autor existe con otro ID en la base espejo. Sincroniza los catálogos antes de guardar.");
+                    }
+                    return foundId;
+                }
+            }
+        }
+
+        if (mirror) {
+            if (idEsperado <= 0) throw new SQLException("No se pudo sincronizar el autor con la base espejo.");
+            String insert = "INSERT INTO " + authorTable + "(id_autor,nombre,nacionalidad) VALUES(?,?,NULL)";
+            try (PreparedStatement s = c.prepareStatement(insert)) {
+                s.setInt(1, idEsperado); s.setString(2, nombre); s.executeUpdate();
+            }
+            return idEsperado;
+        }
+
+        String insert = "INSERT INTO " + authorTable + "(nombre,nacionalidad) VALUES(?,NULL)";
+        try (PreparedStatement s = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
+            s.setString(1, nombre); s.executeUpdate();
+            try (ResultSet keys = s.getGeneratedKeys()) {
+                if (!keys.next()) throw new SQLException("MySQL no devolvió el ID del autor nuevo.");
+                return keys.getInt(1);
+            }
+        }
     }
 
     public void borrarLibro(int id) throws SQLException {

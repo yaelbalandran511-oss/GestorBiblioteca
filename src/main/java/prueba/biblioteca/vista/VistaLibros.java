@@ -22,7 +22,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import prueba.biblioteca.controlador.ControladorLibros;
-import prueba.biblioteca.modelo.Autor;
 import prueba.biblioteca.modelo.Categoria;
 import prueba.biblioteca.modelo.Libro;
 
@@ -95,10 +94,9 @@ public final class VistaLibros extends VBox {
 
     private void abrirFormulario(Libro seleccionado) {
         try {
-            List<Autor> autores = controlador.autores();
             List<Categoria> categorias = controlador.categorias();
-            if (autores.isEmpty() || categorias.isEmpty()) {
-                VistaMensajes.informacion(owner, "Agrega primero al menos un autor y una categoría en MySQL Workbench.");
+            if (categorias.isEmpty()) {
+                VistaMensajes.informacion(owner, "Agrega primero al menos una categoría en MySQL Workbench.");
                 return;
             }
 
@@ -108,14 +106,14 @@ public final class VistaLibros extends VBox {
             if (owner != null) dialog.initOwner(owner);
             TextField titulo = new TextField(seleccionado == null ? "" : seleccionado.getTitulo());
             TextField isbn = new TextField(seleccionado == null ? "" : seleccionado.getIsbn());
-            ComboBox<Autor> autor = new ComboBox<>(FXCollections.observableArrayList(autores));
+            TextField autor = new TextField(seleccionado == null ? "" : seleccionado.getAutor());
             ComboBox<Categoria> categoria = new ComboBox<>(FXCollections.observableArrayList(categorias));
-            if (seleccionado == null) { autor.getSelectionModel().selectFirst(); categoria.getSelectionModel().selectFirst(); }
+            if (seleccionado == null) { categoria.getSelectionModel().selectFirst(); }
             else {
-                autores.stream().filter(opcion -> opcion.id() == seleccionado.getIdAutor()).findFirst().ifPresent(autor::setValue);
                 categorias.stream().filter(opcion -> opcion.id() == seleccionado.getIdCategoria()).findFirst().ifPresent(categoria::setValue);
             }
             titulo.setPromptText("Título del libro"); isbn.setPromptText("ISBN (único)");
+            autor.setPromptText("Escribe cualquier nombre de autor");
             GridPane form = formulario();
             agregarFila(form, 0, "Título", titulo); agregarFila(form, 1, "ISBN", isbn);
             agregarFila(form, 2, "Autor", autor); agregarFila(form, 3, "Categoría", categoria);
@@ -124,9 +122,9 @@ public final class VistaLibros extends VBox {
             boolean[] guardado = {false};
             dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(ActionEvent.ACTION, event -> {
                 try {
-                    if (autor.getValue() == null || categoria.getValue() == null) throw new IllegalArgumentException("Selecciona autor y categoría.");
+                    if (categoria.getValue() == null) throw new IllegalArgumentException("Selecciona una categoría.");
                     controlador.guardar(seleccionado == null ? 0 : seleccionado.getId(), titulo.getText(), isbn.getText(),
-                            autor.getValue().id(), categoria.getValue().id());
+                            autor.getText(), categoria.getValue().id());
                     guardado[0] = true; cargar();
                 } catch (Exception exception) {
                     event.consume(); VistaMensajes.error(owner, exception);
