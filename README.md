@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Gestor de Biblioteca
 
 Aplicación de escritorio en JavaFX para administrar libros, préstamos e historial. La aplicación sigue una estructura MVC: modelos en `modelo`, pantallas en `vista`, acciones y reglas en `controlador`, y persistencia MySQL en `database`.
@@ -33,3 +34,6 @@ Para que todos vean los mismos registros, ambas URLs JDBC deben apuntar a un ser
 
 Los nombres, correos y préstamos incluidos en `instalar_bases.sql` son ficticios. El script usa `INSERT IGNORE`, así que se puede volver a ejecutar sin sobrescribir registros existentes.
 
+=======
+# GestorBiblioteca
+>>>>>>> 623179660677e03f4765d7b6144fbf1a0b67a6bd
