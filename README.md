@@ -31,6 +31,7 @@ jdbc:mysql://localhost:3306/gestor_biblioteca_espejo?serverTimezone=UTC&useSSL=f
 ## Comportamiento principal
 
 - Para agregar un libro se escribe título, ISBN, autor, nacionalidad y categoría. El autor se crea si no existe; la nacionalidad es obligatoria y admite hasta 50 caracteres.
+- Para registrar un préstamo se escribe el nombre y correo del usuario. El correo permite reutilizar un usuario ya registrado y evita duplicarlo; si el mismo correo se escribe con otro nombre, se solicita corregir los datos.
 - Al eliminar un libro, también se elimina su autor solo si ya no tiene otros libros asociados. Un préstamo relacionado impide borrar el libro.
 - Los estados `Prestado` y `Retraso` cuentan como activos, ocupan el libro y aparecen en la vista de préstamos activos. `Devuelto` queda en el historial.
 - Las escrituras se envían a la base espejo cuando está configurada.

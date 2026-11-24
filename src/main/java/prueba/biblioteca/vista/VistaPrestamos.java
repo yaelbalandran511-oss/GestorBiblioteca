@@ -144,41 +144,50 @@ public final class VistaPrestamos extends VBox {
         try {
             List<Usuario> usuarios = controlador.usuarios();
             List<Libro> libros = controlador.libros();
-            // Una biblioteca sin usuarios o libros no puede registrar un préstamo válido.
-            if (usuarios.isEmpty() || libros.isEmpty()) {
-                VistaMensajes.informacion(owner, "Necesitas al menos un usuario y un libro antes de crear un préstamo.");
+            // El usuario se puede registrar desde el formulario; sí se necesita un libro del catálogo.
+            if (libros.isEmpty()) {
+                VistaMensajes.informacion(owner, "Necesitas al menos un libro antes de crear un préstamo.");
                 return;
             }
             Dialog<ButtonType> dialog = new Dialog<>();
             dialog.setTitle(seleccionado == null ? "Nuevo préstamo" : "Editar préstamo");
             dialog.setHeaderText("Completa la información del préstamo");
             if (owner != null) dialog.initOwner(owner);
-            ComboBox<Usuario> usuario = new ComboBox<>(FXCollections.observableArrayList(usuarios));
+            TextField nombreUsuario = new TextField();
+            TextField correoUsuario = new TextField();
             ComboBox<Libro> libro = new ComboBox<>(FXCollections.observableArrayList(libros));
-            usuario.getSelectionModel().selectFirst(); libro.getSelectionModel().selectFirst();
+            libro.getSelectionModel().selectFirst();
             if (seleccionado != null) {
-                usuarios.stream().filter(opcion -> opcion.id() == seleccionado.getIdUsuario()).findFirst().ifPresent(usuario::setValue);
+                usuarios.stream().filter(opcion -> opcion.id() == seleccionado.getIdUsuario()).findFirst().ifPresent(opcion -> {
+                    nombreUsuario.setText(opcion.nombre());
+                    correoUsuario.setText(opcion.correoElectronico());
+                });
                 libros.stream().filter(opcion -> opcion.getId() == seleccionado.getIdLibro()).findFirst().ifPresent(libro::setValue);
             }
+            nombreUsuario.setPromptText("Nombre completo del usuario");
+            correoUsuario.setPromptText("correo@ejemplo.com");
             DatePicker fecha = new DatePicker(seleccionado == null ? LocalDate.now() : LocalDate.parse(seleccionado.getFecha()));
             // Los tres estados se usan al editar; todo préstamo nuevo inicia como Prestado.
             ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Prestado", "Retraso", "Devuelto"));
             estado.setValue(seleccionado == null ? "Prestado" : seleccionado.getEstado());
             estado.setDisable(seleccionado == null);
             GridPane form = formulario();
-            agregarFila(form, 0, "Usuario", usuario); agregarFila(form, 1, "Libro", libro);
-            agregarFila(form, 2, "Fecha de salida", fecha); agregarFila(form, 3, "Estado", estado);
+            agregarFila(form, 0, "Nombre de usuario", nombreUsuario);
+            agregarFila(form, 1, "Correo electrónico", correoUsuario);
+            agregarFila(form, 2, "Libro", libro);
+            agregarFila(form, 3, "Fecha de salida", fecha);
+            agregarFila(form, 4, "Estado", estado);
             dialog.getDialogPane().setContent(form);
             dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
             boolean[] guardado = {false};
             // Si el guardado falla, se cancela el cierre del diálogo y se muestra el motivo.
             dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(ActionEvent.ACTION, event -> {
                 try {
-                    if (usuario.getValue() == null || libro.getValue() == null) {
-                        throw new IllegalArgumentException("Selecciona un usuario y un libro.");
+                    if (libro.getValue() == null) {
+                        throw new IllegalArgumentException("Selecciona un libro.");
                     }
                     controlador.guardar(seleccionado == null ? 0 : seleccionado.getId(), fecha.getValue(), estado.getValue(),
-                            usuario.getValue().id(), libro.getValue().getId());
+                            nombreUsuario.getText(), correoUsuario.getText(), libro.getValue().getId());
                     guardado[0] = true; cargar();
                 } catch (Exception exception) {
                     event.consume(); VistaMensajes.error(owner, exception);

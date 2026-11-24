@@ -20,6 +20,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -275,20 +276,30 @@ public class BibliotecaDB {
         });
     }
 
-    /** Inserta o actualiza un préstamo; Prestado y Retraso ocupan el libro hasta su devolución. */
-    public void guardarPrestamo(int id, String fecha, String estado, int usuario, int libro) throws SQLException {
+    /** Inserta o actualiza usuario y préstamo; el correo único permite reutilizar usuarios existentes. */
+    public void guardarPrestamo(int id, String fecha, String estado, String nombreUsuario,
+                                String correoUsuario, int libro) throws SQLException {
         LocalDate loanDate;
         try { loanDate = LocalDate.parse(fecha); }
         catch (RuntimeException ex) { throw new SQLException("La fecha del préstamo no es válida.", ex); }
         if (loanDate.isAfter(LocalDate.now())) throw new SQLException("La fecha de salida no puede estar en el futuro.");
-        if (usuario <= 0 || libro <= 0) throw new SQLException("Selecciona un usuario y un libro válidos.");
+        String cleanName = nombreUsuario == null ? "" : nombreUsuario.trim();
+        String cleanEmail = correoUsuario == null ? "" : correoUsuario.trim().toLowerCase(Locale.ROOT);
+        if (cleanName.isEmpty() || cleanName.length() > 100) throw new SQLException("El nombre del usuario es obligatorio y admite hasta 100 caracteres.");
+        if (cleanEmail.isEmpty() || cleanEmail.length() > 150 || !cleanEmail.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+            throw new SQLException("Escribe un correo válido de hasta 150 caracteres.");
+        }
+        if (libro <= 0) throw new SQLException("Selecciona un libro válido.");
         if (!"Prestado".equals(estado) && !"Retraso".equals(estado) && !"Devuelto".equals(estado)) {
             throw new SQLException("El estado del préstamo no es válido.");
         }
         String loanState = estado;
         final int[] generatedId = {id};
+        final int[] userId = {0};
         writeBoth((c, schema, mirror) -> {
             String loanTable = table(schema, "Prestamo");
+            int usuario = obtenerOCrearUsuario(c, schema, cleanName, cleanEmail, mirror, userId[0]);
+            if (!mirror) userId[0] = usuario;
             if ("Prestado".equals(loanState) || "Retraso".equals(loanState)) validarDisponible(c, schema, libro, id);
             if (id == 0) {
                 if (mirror) {
@@ -312,6 +323,50 @@ public class BibliotecaDB {
                 }
             }
         });
+    }
+
+    /** Busca por correo único, valida que el nombre coincida o crea al usuario con el mismo ID en ambas bases. */
+    private int obtenerOCrearUsuario(Connection c, String schema, String nombre, String correo,
+                                     boolean mirror, int idEsperado) throws SQLException {
+        String userTable = table(schema, "Usuario");
+        String lookup = "SELECT id_usuario,nombre FROM " + userTable +
+                " WHERE LOWER(TRIM(correo_electronico))=LOWER(?) LIMIT 1";
+        try (PreparedStatement s = c.prepareStatement(lookup)) {
+            s.setString(1, correo);
+            try (ResultSet rows = s.executeQuery()) {
+                if (rows.next()) {
+                    int foundId = rows.getInt(1);
+                    if (!rows.getString(2).trim().equalsIgnoreCase(nombre)) {
+                        throw new SQLException("Ese correo ya está registrado con otro nombre. Revisa los datos del usuario.");
+                    }
+                    if (mirror && foundId != idEsperado) {
+                        throw new SQLException("El usuario tiene otro ID en la base espejo. Sincroniza los usuarios antes de guardar.");
+                    }
+                    return foundId;
+                }
+            }
+        }
+
+        if (mirror) {
+            if (idEsperado <= 0) throw new SQLException("No se pudo sincronizar el usuario con la base espejo.");
+            String insert = "INSERT INTO " + userTable +
+                    "(id_usuario,nombre,correo_electronico,fecha_registro) VALUES(?,?,?,?)";
+            try (PreparedStatement s = c.prepareStatement(insert)) {
+                s.setInt(1, idEsperado); s.setString(2, nombre); s.setString(3, correo);
+                s.setDate(4, java.sql.Date.valueOf(LocalDate.now())); s.executeUpdate();
+            }
+            return idEsperado;
+        }
+
+        String insert = "INSERT INTO " + userTable + "(nombre,correo_electronico,fecha_registro) VALUES(?,?,?)";
+        try (PreparedStatement s = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
+            s.setString(1, nombre); s.setString(2, correo);
+            s.setDate(3, java.sql.Date.valueOf(LocalDate.now())); s.executeUpdate();
+            try (ResultSet keys = s.getGeneratedKeys()) {
+                if (!keys.next()) throw new SQLException("MySQL no devolvió el ID del usuario nuevo.");
+                return keys.getInt(1);
+            }
+        }
     }
 
     /** Bloquea el libro y evita dos préstamos activos (Prestado o Retraso) al mismo tiempo. */
