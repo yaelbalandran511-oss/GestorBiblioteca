@@ -1,39 +1,42 @@
-<<<<<<< HEAD
 # Gestor de Biblioteca
 
-Aplicación de escritorio en JavaFX para administrar libros, préstamos e historial. La aplicación sigue una estructura MVC: modelos en `modelo`, pantallas en `vista`, acciones y reglas en `controlador`, y persistencia MySQL en `database`.
+Aplicación de escritorio en JavaFX para administrar el catálogo de libros y los préstamos. Está organizada con el patrón Modelo Vista Controlador (MVC):
+
+- `modelo`: clases que representan libros, autores, usuarios, categorías y préstamos.
+- `vista`: pantallas y formularios JavaFX.
+- `controlador`: navegación, validaciones y coordinación de acciones.
+- `database/BibliotecaDB.java`: consultas y escrituras JDBC en MySQL.
 
 ## Requisitos
 
 - Java JDK 21 o posterior.
 - IntelliJ IDEA o Maven.
-- MySQL 8 y MySQL Workbench para crear las bases.
+- MySQL 8 y MySQL Workbench.
 
-## Instalación en una computadora
+## Instalación
 
-1. Clona este repositorio desde GitHub Desktop y abre la carpeta `GestorBiblioteca` en IntelliJ.
-2. En MySQL Workbench, abre y ejecuta `database/instalar_bases.sql`. El script crea `gestor_biblioteca` y `gestor_biblioteca_espejo`, sus tablas y datos ficticios de demostración.
-3. Espera a que IntelliJ cargue las dependencias de Maven.
-4. Ejecuta `prueba.biblioteca.App` desde IntelliJ o, desde la carpeta del proyecto, ejecuta `mvn javafx:run`.
-5. En la ventana **Conexiones**, ingresa el host, puerto, usuario y contraseña de MySQL de esa instalación. La configuración queda en `config.properties`, un archivo local ignorado por Git.
+1. Abre el proyecto en IntelliJ IDEA.
+2. En MySQL Workbench, ejecuta `database/instalar_bases.sql`. El script crea `gestor_biblioteca` y `gestor_biblioteca_espejo`, las tablas y datos ficticios de demostración.
+3. Espera a que Maven descargue las dependencias.
+4. Ejecuta `prueba.biblioteca.App` desde IntelliJ o `mvn javafx:run` desde la carpeta del proyecto.
+5. En **Conexiones**, configura las URLs, usuario y contraseña de MySQL. La información se guarda en `config.properties`, archivo local excluido de Git.
 
-URLs JDBC locales de ejemplo:
+URLs JDBC para MySQL local:
 
 ```text
 jdbc:mysql://localhost:3306/gestor_biblioteca?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
 jdbc:mysql://localhost:3306/gestor_biblioteca_espejo?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
 ```
 
-## Usar una base compartida por varias computadoras
+## Comportamiento principal
 
-`localhost` siempre significa la computadora donde corre la aplicación. Si cada persona instala MySQL localmente, cada quien tendrá su propia copia de los datos aunque escriba el mismo usuario y contraseña.
+- Para agregar un libro se escribe título, ISBN, autor, nacionalidad y categoría. El autor se crea si no existe; la nacionalidad es obligatoria y admite hasta 50 caracteres.
+- Al eliminar un libro, también se elimina su autor solo si ya no tiene otros libros asociados. Un préstamo relacionado impide borrar el libro.
+- Los estados `Prestado` y `Retraso` cuentan como activos, ocupan el libro y aparecen en la vista de préstamos activos. `Devuelto` queda en el historial.
+- Las escrituras se envían a la base espejo cuando está configurada.
 
-Para que todos vean los mismos registros, ambas URLs JDBC deben apuntar a un servidor MySQL común usando su nombre de red o IP, y ese servidor debe permitir las conexiones de las computadoras del equipo. Configura un usuario MySQL exclusivo para la aplicación, con permisos solo sobre las dos bases; no uses `root` ni publiques contraseñas en el repositorio.
+## Compartir datos entre computadoras
 
-## Datos de demostración
+`localhost` significa la computadora donde se ejecuta la aplicación. Para que varias computadoras vean los mismos registros, sus conexiones deben apuntar a un servidor MySQL común accesible por red. Configura un usuario exclusivo con permisos limitados a estas bases; no uses `root` ni publiques credenciales.
 
-Los nombres, correos y préstamos incluidos en `instalar_bases.sql` son ficticios. El script usa `INSERT IGNORE`, así que se puede volver a ejecutar sin sobrescribir registros existentes.
-
-=======
-# GestorBiblioteca
->>>>>>> 623179660677e03f4765d7b6144fbf1a0b67a6bd
+Los nombres, correos y préstamos de demostración son ficticios. El script usa `INSERT IGNORE` para no duplicar los registros de ejemplo cuando se ejecuta nuevamente.

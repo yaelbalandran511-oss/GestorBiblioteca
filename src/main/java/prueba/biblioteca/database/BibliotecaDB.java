@@ -128,12 +128,12 @@ public class BibliotecaDB {
         return result;
     }
 
-    /** Devuelve préstamos activos o el historial completo, con nombres de usuario y libro. */
+    /** Devuelve Prestado y Retraso como activos; con historial=true incluye también Devuelto. */
     public List<Prestamo> prestamos(boolean historial) throws SQLException {
         List<Prestamo> result = new ArrayList<>();
         String sql = "SELECT p.id_prestamo,p.fecha_salida,p.estado,p.id_usuario,p.id_libro,u.nombre,l.titulo " +
                 "FROM Prestamo p JOIN Usuario u ON u.id_usuario=p.id_usuario " +
-                "JOIN Libro l ON l.id_libro=p.id_libro" + (historial ? "" : " WHERE p.estado='Prestado'") +
+                "JOIN Libro l ON l.id_libro=p.id_libro" + (historial ? "" : " WHERE p.estado IN ('Prestado','Retraso')") +
                 " ORDER BY p.id_prestamo DESC";
         try (Connection c = connect(false); Statement s = c.createStatement(); ResultSet rows = s.executeQuery(sql)) {
             while (rows.next()) result.add(new Prestamo(rows.getInt(1), rows.getDate(2).toString(), rows.getString(3),
@@ -142,7 +142,7 @@ public class BibliotecaDB {
         return result;
     }
 
-    /** Inserta o actualiza un libro y sincroniza autor/libro con la base espejo. */
+    /** Inserta o actualiza un libro; crea autor/nacionalidad si es nuevo y replica los cambios. */
     public void guardarLibro(int id, String titulo, String isbn, String nombreAutor,
                              String nacionalidadAutor, int categoria) throws SQLException {
         String cleanTitle = titulo == null ? "" : titulo.trim();
@@ -236,28 +236,60 @@ public class BibliotecaDB {
         }
     }
 
-    /** Elimina un libro y convierte el error de clave foránea en un mensaje entendible. */
+    /** Borra el libro y, si ya no quedan libros de ese autor, elimina también al autor sin uso. */
     public void borrarLibro(int id) throws SQLException {
+        final int[] authorId = {0};
         writeBoth((c, schema, mirror) -> {
-            try (PreparedStatement s = c.prepareStatement("DELETE FROM " + table(schema, "Libro") + " WHERE id_libro=?")) {
+            String bookTable = table(schema, "Libro");
+            String findAuthor = "SELECT id_autor FROM " + bookTable + " WHERE id_libro=?";
+            try (PreparedStatement s = c.prepareStatement(findAuthor)) {
                 s.setInt(1, id);
-                try { s.executeUpdate(); } catch (SQLException ex) { throw friendlyConstraint(ex, "No se puede eliminar el libro porque tiene préstamos asociados."); }
+                try (ResultSet row = s.executeQuery()) {
+                    if (!row.next()) throw new SQLException("El libro ya no existe.");
+                    int foundAuthorId = row.getInt(1);
+                    // Se evita borrar relaciones incorrectas cuando los dos catálogos están desincronizados.
+                    if (mirror && foundAuthorId != authorId[0]) {
+                        throw new SQLException("El libro está relacionado con autores distintos entre la base principal y la espejo.");
+                    }
+                    if (!mirror) authorId[0] = foundAuthorId;
+                }
+            }
+
+            try (PreparedStatement s = c.prepareStatement("DELETE FROM " + bookTable + " WHERE id_libro=?")) {
+                s.setInt(1, id);
+                try {
+                    if (s.executeUpdate() == 0) throw new SQLException("El libro ya no existe.");
+                } catch (SQLException ex) {
+                    throw friendlyConstraint(ex, "No se puede eliminar el libro porque tiene préstamos asociados.");
+                }
+            }
+
+            // Conserva autores compartidos: solo borra el autor cuando ya no tiene libros.
+            String deleteUnusedAuthor = "DELETE FROM " + table(schema, "Autor") +
+                    " WHERE id_autor=? AND NOT EXISTS (SELECT 1 FROM " + bookTable + " WHERE id_autor=?)";
+            try (PreparedStatement s = c.prepareStatement(deleteUnusedAuthor)) {
+                s.setInt(1, authorId[0]);
+                s.setInt(2, authorId[0]);
+                s.executeUpdate();
             }
         });
     }
 
-    /** Registra o actualiza un préstamo; valida disponibilidad antes de marcarlo como prestado. */
-    public void guardarPrestamo(int id, String fecha, int estado, int usuario, int libro) throws SQLException {
+    /** Inserta o actualiza un préstamo; Prestado y Retraso ocupan el libro hasta su devolución. */
+    public void guardarPrestamo(int id, String fecha, String estado, int usuario, int libro) throws SQLException {
         LocalDate loanDate;
         try { loanDate = LocalDate.parse(fecha); }
         catch (RuntimeException ex) { throw new SQLException("La fecha del préstamo no es válida.", ex); }
         if (loanDate.isAfter(LocalDate.now())) throw new SQLException("La fecha de salida no puede estar en el futuro.");
         if (usuario <= 0 || libro <= 0) throw new SQLException("Selecciona un usuario y un libro válidos.");
-        String loanState = estado == 1 ? "Prestado" : "Devuelto";
+        if (!"Prestado".equals(estado) && !"Retraso".equals(estado) && !"Devuelto".equals(estado)) {
+            throw new SQLException("El estado del préstamo no es válido.");
+        }
+        String loanState = estado;
         final int[] generatedId = {id};
         writeBoth((c, schema, mirror) -> {
             String loanTable = table(schema, "Prestamo");
-            if ("Prestado".equals(loanState)) validarDisponible(c, schema, libro, id);
+            if ("Prestado".equals(loanState) || "Retraso".equals(loanState)) validarDisponible(c, schema, libro, id);
             if (id == 0) {
                 if (mirror) {
                     try (PreparedStatement s = c.prepareStatement("INSERT INTO " + loanTable + "(id_prestamo,fecha_salida,estado,id_usuario,id_libro) VALUES(?,?,?,?,?)")) {
@@ -282,7 +314,7 @@ public class BibliotecaDB {
         });
     }
 
-    /** Bloquea temporalmente el libro y evita que tenga dos préstamos activos a la vez. */
+    /** Bloquea el libro y evita dos préstamos activos (Prestado o Retraso) al mismo tiempo. */
     private void validarDisponible(Connection c, String schema, int libro, int prestamoActual) throws SQLException {
         String bookTable = table(schema, "Libro");
         try (PreparedStatement lock = c.prepareStatement("SELECT id_libro FROM " + bookTable + " WHERE id_libro=? FOR UPDATE")) {
@@ -292,7 +324,7 @@ public class BibliotecaDB {
             }
         }
         String sql = "SELECT id_prestamo FROM " + table(schema, "Prestamo") +
-                " WHERE id_libro=? AND estado='Prestado' AND id_prestamo<>? LIMIT 1";
+                " WHERE id_libro=? AND estado IN ('Prestado','Retraso') AND id_prestamo<>? LIMIT 1";
         try (PreparedStatement check = c.prepareStatement(sql)) {
             check.setInt(1, libro); check.setInt(2, prestamoActual);
             try (ResultSet row = check.executeQuery()) {
@@ -310,9 +342,11 @@ public class BibliotecaDB {
         });
     }
 
-    /** Cambia el estado a uno de los dos valores permitidos y sincroniza ambas bases. */
+    /** Cambia el estado permitido y sincroniza ambas bases. */
     public void cambiarEstado(int id, String estado) throws SQLException {
-        if (!"Prestado".equals(estado) && !"Devuelto".equals(estado)) throw new SQLException("El estado del préstamo no es válido.");
+        if (!"Prestado".equals(estado) && !"Retraso".equals(estado) && !"Devuelto".equals(estado)) {
+            throw new SQLException("El estado del préstamo no es válido.");
+        }
         writeBoth((c, schema, mirror) -> {
             try (PreparedStatement s = c.prepareStatement("UPDATE " + table(schema, "Prestamo") + " SET estado=? WHERE id_prestamo=?")) {
                 s.setString(1, estado); s.setInt(2, id); s.executeUpdate();

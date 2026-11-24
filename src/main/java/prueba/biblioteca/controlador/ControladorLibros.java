@@ -25,7 +25,7 @@ public final class ControladorLibros {
     /** Catálogo requerido por el formulario de libros. */
     public List<Categoria> categorias() throws SQLException { return modelo.categorias(); }
 
-    /** Valida datos del formulario y solicita al modelo guardar o actualizar el libro. */
+    /** Valida libro, autor y nacionalidad; después pide al modelo guardar o actualizar el registro. */
     public void guardar(int id, String titulo, String isbn, String nombreAutor,
                         String nacionalidadAutor, int idCategoria) throws SQLException {
         String tituloLimpio = titulo == null ? "" : titulo.trim();

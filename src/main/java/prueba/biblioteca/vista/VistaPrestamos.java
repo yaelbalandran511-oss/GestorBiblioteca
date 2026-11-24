@@ -83,7 +83,7 @@ public final class VistaPrestamos extends VBox {
                 (prestamo.getUsuario() + prestamo.getLibro() + prestamo.getFecha() + prestamo.getEstado())
                         .toLowerCase().contains(texto.trim().toLowerCase())));
 
-        // La devolución se habilita desde la vista de activos, no desde el historial.
+        // La devolución está disponible en activos; tanto Prestado como Retraso pueden devolverse.
         Button editar = new Button("Editar"); editar.getStyleClass().add("secondary-button");
         Button devolver = new Button("Registrar devolución"); devolver.getStyleClass().add("secondary-button");
         Button eliminar = new Button("Eliminar"); eliminar.getStyleClass().add("danger-button");
@@ -118,7 +118,7 @@ public final class VistaPrestamos extends VBox {
     private void devolverSeleccionado() {
         Prestamo seleccionado = tabla.getSelectionModel().getSelectedItem();
         if (seleccionado == null) { VistaMensajes.informacion(owner, "Selecciona un préstamo activo."); return; }
-        if (!"Prestado".equals(seleccionado.getEstado())) {
+        if (!"Prestado".equals(seleccionado.getEstado()) && !"Retraso".equals(seleccionado.getEstado())) {
             VistaMensajes.informacion(owner, "Ese préstamo ya aparece como devuelto."); return;
         }
         try {
@@ -161,8 +161,8 @@ public final class VistaPrestamos extends VBox {
                 libros.stream().filter(opcion -> opcion.getId() == seleccionado.getIdLibro()).findFirst().ifPresent(libro::setValue);
             }
             DatePicker fecha = new DatePicker(seleccionado == null ? LocalDate.now() : LocalDate.parse(seleccionado.getFecha()));
-            // Al crear, el estado inicial es Prestado y no se permite editarlo en ese momento.
-            ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Prestado", "Devuelto"));
+            // Los tres estados se usan al editar; todo préstamo nuevo inicia como Prestado.
+            ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Prestado", "Retraso", "Devuelto"));
             estado.setValue(seleccionado == null ? "Prestado" : seleccionado.getEstado());
             estado.setDisable(seleccionado == null);
             GridPane form = formulario();

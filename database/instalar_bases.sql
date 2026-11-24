@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS Usuario (
     fecha_registro DATE NOT NULL
 ) ENGINE=InnoDB;
 -- Autores del catálogo. Un libro nuevo puede crear aquí un autor escrito desde la aplicación.
+-- La aplicación exige nacionalidad al registrar autores; la columna acepta NULL por compatibilidad con datos antiguos.
 CREATE TABLE IF NOT EXISTS Autor (
     id_autor INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS Libro (
     CONSTRAINT fk_libro_categoria FOREIGN KEY (id_categoria) REFERENCES Categoria(id_categoria) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 -- Movimientos de préstamo; RESTRICT evita borrar personas/libros que tengan relaciones activas.
+-- estado acepta Prestado, Retraso o Devuelto; los dos primeros cuentan como préstamos activos en la aplicación.
 CREATE TABLE IF NOT EXISTS Prestamo (
     id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
     fecha_salida DATE NOT NULL,
@@ -56,6 +58,7 @@ CREATE TABLE IF NOT EXISTS Usuario (
     fecha_registro DATE NOT NULL
 ) ENGINE=InnoDB;
 -- Copia de la tabla de autores.
+-- Mantiene la misma estructura para que la aplicación pueda replicar altas y bajas.
 CREATE TABLE IF NOT EXISTS Autor (
     id_autor INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
@@ -78,6 +81,7 @@ CREATE TABLE IF NOT EXISTS Libro (
     CONSTRAINT fk_libro_categoria FOREIGN KEY (id_categoria) REFERENCES Categoria(id_categoria) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 -- Copia de los préstamos y sus relaciones con usuario y libro.
+-- Prestado y Retraso ocupan el libro; Devuelto queda solo en el historial.
 CREATE TABLE IF NOT EXISTS Prestamo (
     id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
     fecha_salida DATE NOT NULL,
